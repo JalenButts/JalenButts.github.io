@@ -5,201 +5,194 @@
 <meta charset="UTF-8">
 <title>Mini Geometry Dash</title>
 <style>
-    body {
-        margin: 0;
-        font-family: Arial, sans-serif;
-        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-        color: white;
-        text-align: center;
-    }
+  body {
+    margin: 0;
+    background: linear-gradient(#0f2027, #203a43, #2c5364);
+    font-family: Arial, sans-serif;
+    color: white;
+    text-align: center;
+  }
 
-    canvas {
-        background: #111;
-        display: block;
-        margin: 20px auto;
-        border: 3px solid #00e5ff;
-        border-radius: 10px;
-    }
+  canvas {
+    display: block;
+    margin: 20px auto;
+    background: #111;
+    border: 3px solid #00ffff;
+    box-shadow: 0 0 20px #00ffff;
+  }
 
-    #ui {
-        position: absolute;
-        width: 100%;
-        top: 0;
-        left: 0;
-    }
+  #menu, #gameOver {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
 
-    .screen {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0,0,0,0.85);
-        padding: 30px;
-        border-radius: 15px;
-        box-shadow: 0 0 20px #00e5ff;
-    }
+  h1 {
+    color: #00ffff;
+  }
 
-    button {
-        padding: 10px 20px;
-        font-size: 16px;
-        background: #00e5ff;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        margin-top: 15px;
-    }
-
-    button:hover {
-        background: #00bcd4;
-    }
-
-    #score {
-        font-size: 20px;
-        margin-top: 10px;
-    }
+  .hidden {
+    display: none;
+  }
 </style>
 </head>
 <body>
 
-<div id="ui">
-    <div id="startScreen" class="screen">
-        <h1>Geometry Dash Lite</h1>
-        <p>Press <b>SPACE</b> to jump.</p>
-        <p>Avoid obstacles and survive as long as possible!</p>
-        <button onclick="startGame()">Start Game</button>
-    </div>
-
-    <div id="gameOverScreen" class="screen" style="display:none;">
-        <h1>Game Over</h1>
-        <p id="finalScore"></p>
-        <button onclick="restartGame()">Restart</button>
-    </div>
-
-    <div id="score" style="display:none;">Score: 0</div>
+<div id="menu">
+  <h1>Geometry Dash Lite</h1>
+  <p>Press SPACE to jump</p>
+  <p>Hold SPACE for higher jumps</p>
+  <p>Avoid obstacles</p>
+  <p>Press SPACE to start</p>
 </div>
 
-<canvas id="gameCanvas" width="600" height="300"></canvas>
+<div id="gameOver" class="hidden">
+  <h1>Game Over</h1>
+  <p id="finalScore"></p>
+  <p>Press SPACE to restart</p>
+</div>
+
+<canvas id="gameCanvas" width="800" height="300"></canvas>
 
 <script>
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-let player, obstacles, gravity, gameRunning, score;
+let gameState = "menu";
+let player, obstacles, gravity, velocityY;
+let isHolding = false;
+let score = 0;
+let speed = 5;
+let level = 1;
 
-function init() {
-    player = { x: 50, y: 250, size: 20, dy: 0 };
-    obstacles = [];
-    gravity = 0.6;
-    gameRunning = false;
-    score = 0;
+// Sound effects
+const jumpSound = new Audio("https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg");
+const crashSound = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
+
+function resetGame() {
+  player = { x: 100, y: 200, size: 20 };
+  obstacles = [];
+  velocityY = 0;
+  gravity = 0.6;
+  score = 0;
+  speed = 5;
+  level = 1;
 }
-
-function startGame() {
-    document.getElementById("startScreen").style.display = "none";
-    document.getElementById("score").style.display = "block";
-    init();
-    gameRunning = true;
-    requestAnimationFrame(gameLoop);
-}
-
-function restartGame() {
-    document.getElementById("gameOverScreen").style.display = "none";
-    document.getElementById("score").style.display = "block";
-    init();
-    gameRunning = true;
-    requestAnimationFrame(gameLoop);
-}
-
-// Single interaction: SPACEBAR
-document.addEventListener("keydown", (e) => {
-    if (e.code === "Space") {
-        if (gameRunning && player.y >= 250) {
-            player.dy = -10;
-        }
-    }
-});
 
 function spawnObstacle() {
-    obstacles.push({
-        x: canvas.width,
-        y: 260,
-        width: 20,
-        height: 40
-    });
+  obstacles.push({
+    x: canvas.width,
+    y: 220,
+    width: 20,
+    height: 40
+  });
 }
 
 function update() {
-    // Player physics
-    player.dy += gravity;
-    player.y += player.dy;
+  if (gameState !== "playing") return;
 
-    if (player.y > 250) {
-        player.y = 250;
-        player.dy = 0;
+  // Player physics
+  if (isHolding) {
+    velocityY -= 0.4;
+  }
+
+  velocityY += gravity;
+  player.y += velocityY;
+
+  // Ground collision
+  if (player.y > 200) {
+    player.y = 200;
+    velocityY = 0;
+  }
+
+  // Obstacles
+  if (Math.random() < 0.02) spawnObstacle();
+
+  obstacles.forEach(o => o.x -= speed);
+
+  // Collision
+  obstacles.forEach(o => {
+    if (
+      player.x < o.x + o.width &&
+      player.x + player.size > o.x &&
+      player.y < o.y + o.height &&
+      player.y + player.size > o.y
+    ) {
+      crashSound.play();
+      gameState = "gameover";
+      document.getElementById("gameOver").classList.remove("hidden");
+      document.getElementById("finalScore").innerText = "Score: " + Math.floor(score);
     }
+  });
 
-    // Obstacles
-    if (Math.random() < 0.02) {
-        spawnObstacle();
-    }
+  obstacles = obstacles.filter(o => o.x > -20);
 
-    for (let i = 0; i < obstacles.length; i++) {
-        obstacles[i].x -= 4;
+  // Score & level
+  score += 0.1;
 
-        // Collision
-        if (
-            player.x < obstacles[i].x + obstacles[i].width &&
-            player.x + player.size > obstacles[i].x &&
-            player.y < obstacles[i].y + obstacles[i].height &&
-            player.y + player.size > obstacles[i].y
-        ) {
-            gameOver();
-        }
-    }
-
-    // Remove off-screen obstacles
-    obstacles = obstacles.filter(o => o.x > -20);
-
-    // Score update
-    score++;
-    document.getElementById("score").innerText = "Score: " + score;
+  if (score > level * 100) {
+    level++;
+    speed += 1;
+  }
 }
 
 function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Ground
-    ctx.fillStyle = "#00e5ff";
-    ctx.fillRect(0, 280, canvas.width, 20);
+  // Player
+  ctx.fillStyle = "#00ffff";
+  ctx.fillRect(player.x, player.y, player.size, player.size);
 
-    // Player
-    ctx.fillStyle = "#ff4081";
-    ctx.fillRect(player.x, player.y, player.size, player.size);
+  // Obstacles
+  ctx.fillStyle = "#ff004c";
+  obstacles.forEach(o => ctx.fillRect(o.x, o.y, o.width, o.height));
 
-    // Obstacles
-    ctx.fillStyle = "#ffeb3b";
-    obstacles.forEach(o => {
-        ctx.fillRect(o.x, o.y, o.width, o.height);
-    });
+  // Ground
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 240, canvas.width, 2);
+
+  // Score
+  ctx.fillStyle = "#fff";
+  ctx.font = "20px Arial";
+  ctx.fillText("Score: " + Math.floor(score), 10, 30);
+  ctx.fillText("Level: " + level, 10, 55);
 }
 
 function gameLoop() {
-    if (!gameRunning) return;
-
-    update();
-    draw();
-    requestAnimationFrame(gameLoop);
+  update();
+  if (gameState === "playing") draw();
+  requestAnimationFrame(gameLoop);
 }
 
-function gameOver() {
-    gameRunning = false;
-    document.getElementById("score").style.display = "none";
-    document.getElementById("gameOverScreen").style.display = "block";
-    document.getElementById("finalScore").innerText = "Final Score: " + score;
-}
+document.addEventListener("keydown", e => {
+  if (e.code === "Space") {
+    if (gameState === "menu") {
+      gameState = "playing";
+      document.getElementById("menu").classList.add("hidden");
+      resetGame();
+    } else if (gameState === "playing") {
+      if (player.y >= 200) {
+        velocityY = -10;
+        jumpSound.play();
+      }
+      isHolding = true;
+    } else if (gameState === "gameover") {
+      document.getElementById("gameOver").classList.add("hidden");
+      resetGame();
+      gameState = "playing";
+    }
+  }
+});
 
-// Initialize
-init();
+document.addEventListener("keyup", e => {
+  if (e.code === "Space") {
+    isHolding = false;
+  }
+});
+
+resetGame();
+gameLoop();
 </script>
 
 </body>
