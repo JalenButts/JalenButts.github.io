@@ -66,7 +66,7 @@ let score = 0;
 let speed = 5;
 let level = 1;
 
-// Sound effects
+// Sounds
 const jumpSound = new Audio("https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg");
 const crashSound = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
 
@@ -83,7 +83,7 @@ function resetGame() {
 function spawnObstacle() {
   obstacles.push({
     x: canvas.width,
-    y: 220,
+    y: 210, // slightly higher for better collision
     width: 20,
     height: 40
   });
@@ -92,7 +92,7 @@ function spawnObstacle() {
 function update() {
   if (gameState !== "playing") return;
 
-  // Player physics
+  // Jump hold mechanic
   if (isHolding) {
     velocityY -= 0.4;
   }
@@ -106,29 +106,50 @@ function update() {
     velocityY = 0;
   }
 
-  // Obstacles
+  // Spawn obstacles
   if (Math.random() < 0.02) spawnObstacle();
 
-  obstacles.forEach(o => o.x -= speed);
+  // Move obstacles
+  for (let i = 0; i < obstacles.length; i++) {
+    obstacles[i].x -= speed;
+  }
 
-  // Collision
-  obstacles.forEach(o => {
+  // ✅ FIXED COLLISION (reliable)
+  for (let i = 0; i < obstacles.length; i++) {
+    let o = obstacles[i];
+
+    let playerLeft = player.x;
+    let playerRight = player.x + player.size;
+    let playerTop = player.y;
+    let playerBottom = player.y + player.size;
+
+    let obstacleLeft = o.x;
+    let obstacleRight = o.x + o.width;
+    let obstacleTop = o.y;
+    let obstacleBottom = o.y + o.height;
+
     if (
-      player.x < o.x + o.width &&
-      player.x + player.size > o.x &&
-      player.y < o.y + o.height &&
-      player.y + player.size > o.y
+      playerRight > obstacleLeft &&
+      playerLeft < obstacleRight &&
+      playerBottom > obstacleTop &&
+      playerTop < obstacleBottom
     ) {
+      crashSound.currentTime = 0;
       crashSound.play();
+
       gameState = "gameover";
       document.getElementById("gameOver").classList.remove("hidden");
-      document.getElementById("finalScore").innerText = "Score: " + Math.floor(score);
-    }
-  });
+      document.getElementById("finalScore").innerText =
+        "Score: " + Math.floor(score);
 
+      return; // stop everything instantly
+    }
+  }
+
+  // Remove off-screen obstacles
   obstacles = obstacles.filter(o => o.x > -20);
 
-  // Score & level
+  // Score + level system
   score += 0.1;
 
   if (score > level * 100) {
@@ -146,13 +167,15 @@ function draw() {
 
   // Obstacles
   ctx.fillStyle = "#ff004c";
-  obstacles.forEach(o => ctx.fillRect(o.x, o.y, o.width, o.height));
+  for (let o of obstacles) {
+    ctx.fillRect(o.x, o.y, o.width, o.height);
+  }
 
   // Ground
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 240, canvas.width, 2);
 
-  // Score
+  // UI
   ctx.fillStyle = "#fff";
   ctx.font = "20px Arial";
   ctx.fillText("Score: " + Math.floor(score), 10, 30);
@@ -165,6 +188,7 @@ function gameLoop() {
   requestAnimationFrame(gameLoop);
 }
 
+// Controls (SPACE only)
 document.addEventListener("keydown", e => {
   if (e.code === "Space") {
     if (gameState === "menu") {
@@ -174,6 +198,7 @@ document.addEventListener("keydown", e => {
     } else if (gameState === "playing") {
       if (player.y >= 200) {
         velocityY = -10;
+        jumpSound.currentTime = 0;
         jumpSound.play();
       }
       isHolding = true;
